@@ -1,0 +1,11 @@
+<!-- loadr live reloader automatically injected by Render() when LiveReload is set-->
+<script>
+    const eventSource = new EventSource('/live-reload');
+
+    eventSource.onmessage = function (event) {
+        if (event.data === 'reload') {
+            window.location.reload();
+        }
+    };
+
+</script>

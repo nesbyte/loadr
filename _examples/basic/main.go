@@ -1,9 +1,8 @@
 package main
 
 import (
-	"flag"
+	"embed"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -11,82 +10,118 @@ import (
 	"github.com/nesbyte/loadr"
 )
 
-// Sets the configuration for the renderer
-func createRenderOpts(liveReload bool) loadr.RendererOpts {
-	return loadr.RendererOpts{
-		FS:          os.DirFS("."),
-		StripPrefix: "",
-		LiveReload:  liveReload,
-	}
+//go:embed "*"
+var baseFS embed.FS
+
+// By default (production), use the embedded file system
+var config = loadr.BaseConfig{
+	FS: baseFS,
 }
 
-// This creates a base component with predefined fragments
-// using the html/template
-var baseWithComponents = loadr.NewRenderer().WithComponents("global_components.html")
+type baseData struct {
+	Styles string
+	JSDist string
+}
 
-// Using the base component, index.html is loaded in
-// We have now created our index component where it will
-// the variable should always be lowercased
-var index = baseWithComponents.LoadFiles("index.html")
+// Make package global templates. In larger projects
+// the templates can then be parsed once and imported everywhere.
 
-// From the .html file we extract the templates
+// Creates the initial template and sets an initial config and the
+// expected base data type
+// Base data is the data which will be made available in *all* templates
+// derived from this base template
+var base = loadr.NewBaseTemplate(baseData{}).SetConfig(config).SetBaseTemplates(
+	"index.html",
+	"global_components.html")
 
-// Using no template name, equivalent to calling Execute on a parsed template file
-var indexPage = index.Template(loadr.NoTemplateName)
-
-// To render only a named template
-var indexContent = index.Template("content")
-
-// The defined data that the render function takes in
+// The defined data that the index render function takes in
 type IndexData struct {
 	Name    string
 	Content string
 }
 
-// This is the render function where the HTML rendering and custom data model come together
+// This extracts the template of interest from base, and provides
+// The template specific data type
+var index = loadr.NewTemplate(base, "index.html", IndexData{})
 
-// If the LiveReload option is true every time this function
-// is called, it will automatically re-parse the HTML
-// If false, the cached version will be used instead
-// check out the benchmark (here:) to see the performance difference
-func RenderIndex(w io.Writer, d IndexData) error {
-	return indexPage.Render(w, d)
+// Some data for the content template
+type ContentData struct {
+	Content string
 }
 
-func RenderIndexContent(w io.Writer, d IndexData) error {
-	return indexContent.Render(w, d)
-}
-
-// Uncomment the line below and see how the program will fail immediately on start
-//var _ = baseWithComponents.LoadFiles("I-do-not-exist.html").Template(loadr.NoTemplateName)
-
-// Set livereload based on a flag
-var liveReload = flag.Bool("livereload", false, "use to set livereload to true")
+// Extracts another template of interest with it's specific data type
+var content = loadr.NewTemplate(base, "content", ContentData{})
 
 // Bringing it all together below
 func main() {
+
+	// This can also be set outside of a function however, it is primarely
+	// for making things such as cache busting easier and provide
+	// essentially constant data.
+	// If SetBaseData is called again, the update will propagate to all child templates
+	// immediately on next Render() call regardless of the LoadTemplates call.
+	base.SetBaseData(baseData{"styles.[somehash].css", "dist/bundle.[somehash].js"})
+
+	// Let's create a basic web server
 	r := http.NewServeMux()
-	flag.Parse()
-	baseWithComponents.SetOptions(createRenderOpts(*liveReload))
+
+	// When in dev mode, live-reloading can be enabled
+	// If you run the server feel free to change the index.html, save and see the page
+	// update on the fly without needing to recompile!
+	// Breaking the fields provide verbose error messages
+	liveReload := false
+	if liveReload {
+
+		// In dev, use the os filesystem instead of the embedded one
+		// to allow for live reloads to take place
+		var config = loadr.BaseConfig{
+			FS: os.DirFS("."),
+		}
+		base.SetConfig(config) // resetting the config is ok!
+
+		// Live reload takes in the pattern of which the HTTP server will listen on (/live-reload)
+		// and allows some insertion of custom logic of what to do if a file has changed.
+		// HandleReload is a default setup that simply prints out reloaded files or errors
+		// pathsToWatch will recursively watch all files and folders inside itself
+		lsHandler, lsClose, err := loadr.RunLiveReload("/live-reload", loadr.HandleReload, ".")
+		if err != nil {
+			log.Fatalln(err)
+		}
+		defer lsClose() // Not strictly necessary, but cleans things up inside the live reloader
+
+		// use the handler provided by the LiveReload function.
+		r.Handle("/live-reload", lsHandler)
+
+	}
+
+	// This should be called after all loadr interactions are set
+	// If this is not run last any changes may not propagate properly
+	// to the templates.
+	err := loadr.LoadTemplates()
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	// The rendering is called in here
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		err := RenderIndex(w, IndexData{"Bob", "SomeContent"})
-		if err != nil {
-			fmt.Println(err.Error())
-		}
+		// Notice how Render() does not return an error?
+		// the error handling is done and returned by LoadTemplates()
+		// earlier on.
+		index.Render(w, IndexData{"Alice", "Index Injected Content"})
 	})
 
 	r.HandleFunc("/content", func(w http.ResponseWriter, r *http.Request) {
-		err := RenderIndexContent(w, IndexData{"Bob", "SomeContent"})
-		if err != nil {
-			fmt.Println(err.Error())
-		}
+		content.Render(w, ContentData{"Specific Template content"})
 	})
 
+	// Uncomment the below and see that it will not compile as the content template is expecting
+	// a ContentData type. Type safety out of the box!
+	// r.HandleFunc("/breaks", func(w http.ResponseWriter, r *http.Request) {
+	// 	content.Render(w, IndexData{"Breaks!", "breaks"})
+	// })
+
 	fmt.Println("Listening on 8080, open http://localhost:8080/")
-	fmt.Println("use -livereload flag to turn on dynamic HTML reloading")
-	err := http.ListenAndServe(":8080", r)
+	err = http.ListenAndServe(":8080", r)
 	if err != nil {
 		log.Fatalln(err)
 	}
