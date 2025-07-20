@@ -2,8 +2,10 @@ package loadr
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 
@@ -24,6 +26,8 @@ type testData struct {
 
 var sample = testData{Test: "Hello World!"}
 
+var sampleSizes = []int{1e0, 1e3, 1e6}
+
 // Using html/templates caching the parsed template
 func BenchmarkStdTemplates(b *testing.B) {
 	t, err := template.ParseFS(htmlDir, "index.html", "components.html")
@@ -31,11 +35,18 @@ func BenchmarkStdTemplates(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		var bs bytes.Buffer
-		bs.Reset()
-		t.ExecuteTemplate(&bs, "index.html", sample)
+	for _, size := range sampleSizes {
+		data := testData{}
+		data.Test = strings.Repeat(sample.Test, size)
+		b.Run(
+			fmt.Sprintf("Size_%d", size),
+			func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					var bs bytes.Buffer
+					bs.Reset()
+					t.ExecuteTemplate(&bs, "index.html", data)
+				}
+			})
 	}
 }
 
@@ -48,11 +59,18 @@ func BenchmarkLoadrInProductionMode(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		var bs bytes.Buffer
-		bs.Reset()
-		t.Render(&bs, sample)
+	for _, size := range sampleSizes {
+		data := testData{}
+		data.Test = strings.Repeat(sample.Test, size)
+
+		b.Run(fmt.Sprintf(
+			"Size_%d", size),
+			func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					var bs bytes.Buffer
+					t.Render(&bs, data)
+				}
+			})
 	}
 }
 
@@ -76,7 +94,7 @@ var once sync.Once
 // Using loadr with live reload enabled
 func BenchmarkLoadrWithLiveReload(b *testing.B) {
 	once.Do(func() {
-		_, _, err := loadr.RunLiveReload("/event", loadr.HandleReloadError, ".")
+		_, _, err := loadr.RunLiveReload("/event", loadr.HandleReload, ".")
 		if err != nil {
 			b.Fatal(err)
 		}
