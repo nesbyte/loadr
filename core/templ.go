@@ -13,8 +13,8 @@ import (
 	"github.com/nesbyte/loadr/registry"
 )
 
-func NewTemplate[T, U any](tc *TemplateContext[T], pattern string, data U) *Templ[T, U] {
-	t := Templ[T, U]{tc: tc, data: data, usePattern: pattern}
+func NewTemplate[T, U any](tc *TemplateContext[T], pattern string, data U, useBaseData bool) *Templ[T, U] {
+	t := Templ[T, U]{tc: tc, data: data, usePattern: pattern, useBaseData: useBaseData}
 
 	registry.Add(&t)
 
@@ -22,10 +22,11 @@ func NewTemplate[T, U any](tc *TemplateContext[T], pattern string, data U) *Temp
 }
 
 type Templ[T, U any] struct {
-	t          *template.Template
-	tc         *TemplateContext[T]
-	data       U
-	usePattern string
+	t           *template.Template
+	tc          *TemplateContext[T]
+	useBaseData bool
+	data        U
+	usePattern  string
 }
 
 var ErrNoBaseOrPatternFound = errors.New("no basetemplate nor patterns have been provided")
@@ -91,9 +92,16 @@ func (t *Templ[T, U]) Load() error {
 	}
 
 	// Try to execute the template using the sample data provided
+	var d any
+	if t.useBaseData {
+		d = BaseData[T, U]{B: *t.tc.baseData, D: t.data}
+	} else {
+		d = t.data
+	}
+
 	bs := []byte{}
 	w := bytes.NewBuffer(bs)
-	err = t.t.ExecuteTemplate(w, t.usePattern, BaseData[T, U]{B: *t.tc.baseData, D: t.data})
+	err = t.t.ExecuteTemplate(w, t.usePattern, d)
 	if err != nil {
 		return newLoadingError(t, fmt.Errorf("%w has a .B or .D prefix been included for the field?: %v", ErrInvalidTemplateData, err))
 	}
@@ -175,7 +183,12 @@ func (fw *failWriter) Write(p []byte) (int, error) {
 func (t *Templ[T, U]) render(w io.Writer, data U) error {
 
 	fw := &failWriter{w: w}
-	d := BaseData[T, U]{B: *t.tc.baseData, D: data}
+	var d any
+	if t.useBaseData {
+		d = BaseData[T, U]{B: *t.tc.baseData, D: data}
+	} else {
+		d = data
+	}
 
 	// Without reload, rendering is short and simple
 	if !registry.LiveReload() {

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Index page</title>
+</head>
+
+<body>
+    {{template "nav"}}
+    <h1>Hello {{.D.Name}}!!</h1>
+    <p>See important business data below</p>
+    {{ template "business-data" .D.Content }}
+    <p>Click <a href="./data">here</a> to render only the business data</p>
+    <p>And click <a href="./profit">here</a> for only the profit</p>
+</body>
+
+</html>
+
+{{ define "business-data" }}
+<table>
+    <thead>
+        <tr>
+            <td>Total No. of Users</td>
+            <td>No. Users Today</td>
+            <td>Total Sales ($)</td>
+            <td>Profit ($)</td>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>{{.NumRegisteredUsers}}</td>
+            <td>{{.NumUsersToday}}</td>
+            <td>{{.TotalSales}}</td>
+            <td>{{ template "profit" .Profit}}</td>
+        </tr>
+    </tbody>
+</table>
+{{ end }}
+
+{{ define "profit"}}
+{{ if gt . 0 }}
+<p style="color: green;">{{.}} :)</p>
+{{ else }}
+<p style="color: red">{{.}} :(</p>
+{{ end }}
+{{ end }}

@@ -109,6 +109,9 @@ func main() {
 		// Notice how Render() does not return an error?
 		// the error handling is done and returned by LoadTemplates()
 		// earlier on.
+		// If you want to handle io.Writer errors, the suggested approach is to
+		// wrap your io.Writer in a custom writer that returns an error
+		w.Header().Set("Content-Length", "0")
 		index.Render(w, IndexData{"Alice", "Index Injected Content"})
 
 		// If you want to handle io.Writer errors, the suggested approach is to
