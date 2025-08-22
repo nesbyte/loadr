@@ -151,7 +151,73 @@ func TestCase1PartialsFromWithTemplates(t *testing.T) {
 		}
 
 	}
+}
 
+var errorSimulatedWrite = errors.New("simulated write error")
+
+type alwaysFailWriter struct{} // dummy writer that always fails
+
+func (fw *alwaysFailWriter) Write(p []byte) (int, error) {
+	return 0, errorSimulatedWrite
+}
+
+// Shows how to wrap a writer to capture the error
+type wrapWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (w *wrapWriter) Write(p []byte) (int, error) {
+	if w.err != nil {
+		return 0, w.err
+	}
+
+	n, err := w.w.Write(p)
+	if err != nil {
+		w.err = err
+	}
+
+	return n, err
+}
+
+// Validates that RenderWithError captures write errors correctly
+func TestRenderWithWriterError(t *testing.T) {
+	var (
+		caseFS = os.DirFS(case1Dir)
+	)
+
+	b := NewTemplateContext(
+		BaseConfig{FS: caseFS},
+		case1BaseData{},
+		"input.html",
+		"input.partial1.html",
+	)
+
+	p1 := NewTemplate(b, "input.html", case1Partial1{})
+
+	err := LoadTemplates()
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Makes sure render does not panic on write errors
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("unexpected panic: %v", r)
+		}
+	}()
+
+	// Even though the writer fails, it should not panic
+	p1.Render(&alwaysFailWriter{}, case1Partial1{"test"})
+
+	// Wrapping the writer, it should be possible to extract the error
+	// and it should not panic
+	wrappedWriter := &wrapWriter{w: &alwaysFailWriter{}}
+	p1.Render(wrappedWriter, case1Partial1{"test"})
+	if wrappedWriter.err != nil {
+	} else {
+		t.Error("expected error, wrappedWriter should have an error")
+	}
 }
 
 func TestBaseCopy(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"text/template"
 
@@ -36,11 +37,11 @@ type LoadingError struct {
 	Err           error
 }
 
-func (e *LoadingError) Error() string {
+func (e LoadingError) Error() string {
 	return fmt.Sprintf("basetemplates %q with templates %q and template pattern %q failed: %s", e.BaseTemplates, strings.Join(e.WithTemplates, ", "), e.UsePattern, e.Err.Error())
 }
 
-func (e *LoadingError) Unwrap() error {
+func (e LoadingError) Unwrap() error {
 	return e.Err
 }
 
@@ -110,36 +111,99 @@ func (t *Templ[T, U]) Load() error {
 //	}
 //
 // Even if no base data has been provided, the template will be provided
-// in the above form.
+// in the above form. If live reloading is enabled, JS is injected at the end of the body.
 //
-// If live reloading is enabled, JS is injected at the end of the body.
+// If handling io.Writer errors is required, it is suggested to wrap the io.Writer
+// in a custom writer that returns an error, for example:
+//
+//	type wrapWriter struct {
+//		w   io.Writer
+//		err error
+//	}
+//
+//	func (w *wrapWriter) Write(p []byte) (int, error) {
+//		if w.err != nil {
+//			return 0, w.err
+//		}
+//
+//		n, err := w.w.Write(p)
+//		if err != nil {
+//			w.err = err
+//		}
+//
+//		return n, err
+//		}
 func (t *Templ[T, U]) Render(w io.Writer, data U) {
+	err := t.render(w, data)
+	if err != nil {
+		if errors.As(err, &LoadingError{}) {
+			panic(err) // this should never happen as the template should have been validated
+		}
+
+		switch err {
+		case http.ErrBodyNotAllowed, http.ErrHijacked, http.ErrContentLength:
+			panic(err) // these are edgecase implementation bugs on the server, panic to notify implementation
+		}
+
+		// Ignore any other error, such as io.Writer errors
+	}
+}
+
+type failWriter struct {
+	w   io.Writer
+	err error
+}
+
+// failWriter is a custom io.Writer that captures the first error
+// that occurs during writing. This is necessary to discern between
+// template rendering errors and writer errors due to how
+// template.ExecuteTemplate works.
+func (fw *failWriter) Write(p []byte) (int, error) {
+	if fw.err != nil {
+		return 0, fw.err
+	}
+
+	n, err := fw.w.Write(p)
+	if err != nil {
+		fw.err = err
+	}
+
+	return n, err
+}
+
+// render is the actual implementation to render the template.
+func (t *Templ[T, U]) render(w io.Writer, data U) error {
+
+	fw := &failWriter{w: w}
 	d := BaseData[T, U]{B: *t.tc.baseData, D: data}
 
-	// In production rendering is short and simple
+	// Without reload, rendering is short and simple
 	if !registry.LiveReload() {
-		err := t.t.ExecuteTemplate(w, t.usePattern, d)
-		if err != nil {
-			panic(&LoadingError{t.tc.baseTemplates, t.tc.withTemplates, t.usePattern, fmt.Errorf("execute template error in render %s", err)})
+		err := t.t.ExecuteTemplate(fw, t.usePattern, d)
+		if fw.err != nil {
+			return fw.err
 		}
-		return
+		if err != nil {
+			// This should never happen as the template has been validated and should be handeled as a panic
+			return &LoadingError{t.tc.baseTemplates, t.tc.withTemplates, t.usePattern, fmt.Errorf("execute template error in render %s", err)}
+		}
+		return nil
 	}
 
 	// Reload the component
 	err := t.Load()
 	if err != nil {
-		w.Write([]byte(registry.JSToInject()))
-
 		livereload.LiveReloadCustomErrorHandler(err)
-		return
+		_, err := fw.Write([]byte(registry.JSToInject()))
+		return err
 	}
 
-	// Capture the output to a buffer
+	// Capture the output to a buffer to inject the necessary JS
 	var buf bytes.Buffer
-
 	err = t.t.ExecuteTemplate(&buf, t.usePattern, d)
 	if err != nil {
-		panic(&LoadingError{t.tc.baseTemplates, t.tc.withTemplates, t.usePattern, fmt.Errorf("execute template error in render %s", err)})
+		// This should never happen as the template has been validated and should be handeled as a panic
+		return &LoadingError{t.tc.baseTemplates, t.tc.withTemplates, t.usePattern, fmt.Errorf("execute template error in render %s", err)}
 	}
 
 	html := buf.String()
@@ -148,5 +212,7 @@ func (t *Templ[T, U]) Render(w io.Writer, data U) {
 		html = html[:idx] + registry.JSToInject() + html[idx:]
 	}
 
-	w.Write([]byte(html))
+	_, err = w.Write([]byte(html))
+
+	return err
 }

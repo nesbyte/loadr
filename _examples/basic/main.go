@@ -110,9 +110,15 @@ func main() {
 		// the error handling is done and returned by LoadTemplates()
 		// earlier on.
 		index.Render(w, IndexData{"Alice", "Index Injected Content"})
+
+		// If you want to handle io.Writer errors, the suggested approach is to
+		// wrap your io.Writer in a custom writer that returns an error
 	})
 
 	r.HandleFunc("/content", func(w http.ResponseWriter, r *http.Request) {
+		// If any server bugs are made, such as writing to a connection
+		// with a content-length that is too small, panic will be raised instead
+		// w.Header().Set("Content-Length", "0") // uncomment to see panic in action
 		content.Render(w, ContentData{"Specific Template content"})
 	})
 
