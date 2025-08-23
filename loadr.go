@@ -34,8 +34,12 @@ const NoData = 0
 // for the loading and validation when loadr.LoadTemplates() is called.
 //
 // No templates get parsed until loadr.Validate() is run
-func NewTemplate[T, U any](tc *core.TemplateContext[T], pattern string, data U, useBaseData bool) *core.Templ[T, U] {
-	return core.NewTemplate(tc, pattern, data, useBaseData)
+func NewTemplate[T, U any](tc *core.TemplateContext[T], pattern string, data U) *core.Templ[T, U] {
+	return core.NewTemplate(tc, pattern, data)
+}
+
+func NewSubTemplate[T, U any](tc *core.TemplateContext[T], pattern string, data U) *core.Templ[T, U] {
+	return core.NewSubTemplate(tc, pattern, data)
 }
 
 // Loads and validates all the created templates.

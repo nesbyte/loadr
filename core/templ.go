@@ -13,8 +13,16 @@ import (
 	"github.com/nesbyte/loadr/registry"
 )
 
-func NewTemplate[T, U any](tc *TemplateContext[T], pattern string, data U, useBaseData bool) *Templ[T, U] {
-	t := Templ[T, U]{tc: tc, data: data, usePattern: pattern, useBaseData: useBaseData}
+func NewTemplate[T, U any](tc *TemplateContext[T], pattern string, data U) *Templ[T, U] {
+	t := Templ[T, U]{tc: tc, data: data, usePattern: pattern, useBaseData: true}
+
+	registry.Add(&t)
+
+	return &t
+}
+
+func NewSubTemplate[T, U any](tc *TemplateContext[T], pattern string, data U) *Templ[T, U] {
+	t := Templ[T, U]{tc: tc, data: data, usePattern: pattern, useBaseData: false}
 
 	registry.Add(&t)
 
