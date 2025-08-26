@@ -56,7 +56,7 @@ func BenchmarkStdTemplates(b *testing.B) {
 // Using loadr with templates loaded
 func BenchmarkLoadrInProductionMode(b *testing.B) {
 
-	t := loadr.NewTemplate(base, "index.html", testData{})
+	t := loadr.NewTemplate(base, testData{})
 	err := loadr.LoadTemplates()
 	if err != nil {
 		b.Fatal(err)
@@ -105,7 +105,7 @@ func BenchmarkLoadrWithLiveReload(b *testing.B) {
 
 	})
 
-	t := loadr.NewTemplate(base, "index.html", testData{})
+	t := loadr.NewTemplate(base, testData{})
 	err := loadr.LoadTemplates()
 	if err != nil {
 		b.Fatal(err)

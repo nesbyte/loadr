@@ -13,8 +13,8 @@ import (
 	"github.com/nesbyte/loadr/registry"
 )
 
-func NewTemplate[T, U any](tc *TemplateContext[T], pattern string, data U) *Templ[T, U] {
-	t := Templ[T, U]{tc: tc, data: data, usePattern: pattern, useBaseData: true}
+func NewTemplate[T, U any](tc *TemplateContext[T], data U) *Templ[T, U] {
+	t := Templ[T, U]{tc: tc, data: data, usePattern: "", useBaseData: true}
 
 	registry.Add(&t)
 
@@ -38,6 +38,7 @@ type Templ[T, U any] struct {
 }
 
 var ErrNoBaseOrPatternFound = errors.New("no basetemplate nor patterns have been provided")
+var ErrNoBasePatternFound = errors.New("no basetemplate has been provided, but NewTemplate was called")
 
 type LoadingError struct {
 	BaseTemplates []string
@@ -103,6 +104,12 @@ func (t *Templ[T, U]) Load() error {
 	var d any
 	if t.useBaseData {
 		d = BaseData[T, U]{B: *t.tc.baseData, D: t.data}
+
+		if len(t.tc.baseTemplates) == 0 {
+			return newLoadingError(t, ErrNoBasePatternFound)
+		} else {
+			t.usePattern = t.tc.baseTemplates[0]
+		}
 	} else {
 		d = t.data
 	}
@@ -111,7 +118,11 @@ func (t *Templ[T, U]) Load() error {
 	w := bytes.NewBuffer(bs)
 	err = t.t.ExecuteTemplate(w, t.usePattern, d)
 	if err != nil {
-		return newLoadingError(t, fmt.Errorf("%w has a .B or .D prefix been included for the field?: %v", ErrInvalidTemplateData, err))
+		if t.useBaseData {
+			return newLoadingError(t, fmt.Errorf("%w has a .B or .D prefix been included for the field?: %v", ErrInvalidTemplateData, err))
+		} else {
+			return newLoadingError(t, fmt.Errorf("%w .B and/or .D must not be provided as base data is not provided: %v", ErrInvalidTemplateData, err))
+		}
 	}
 
 	return nil

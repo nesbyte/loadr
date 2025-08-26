@@ -31,7 +31,7 @@ type BuisnessData struct {
 var businessData = BuisnessData{NumRegisteredUsers: 5042, NumUsersToday: 48, TotalSales: 103452, Profit: 1932}
 
 var base = loadr.NewTemplateContext(loadr.BaseConfig{baseFS}, loadr.NoData, "index.html", "global_components.html")
-var index = loadr.NewTemplate(base, "index.html", IndexData{})
+var index = loadr.NewTemplate(base, IndexData{})
 var data = loadr.NewSubTemplate(base, "business-data", BuisnessData{})
 var profit = loadr.NewSubTemplate(base, "profit", BuisnessData{}.Profit)
 

@@ -26,24 +26,28 @@ type BaseConfig = core.BaseConfig
 
 const NoData = 0
 
-// Lazily prepares the templates for loading by pattern both file names
-// as well as the template names can be provided. If no template name is provided,
-// the template name will be the first name of the SetTemplates() pattern
+// Lazily prepares the base template (the first template name provided in the basePattern of NewTemplateContext).
+// Base data as well as Render data will be passed in on Render(w, data) call as .B and .D respectively.
 //
-// The expected data structure should also be provided as it is used
+// The expected data structure which will be used by the Render(w, data) method should also be provided as it is used
 // for the loading and validation when loadr.LoadTemplates() is called.
 //
 // No templates get parsed until loadr.Validate() is run
-func NewTemplate[T, U any](tc *core.TemplateContext[T], pattern string, data U) *core.Templ[T, U] {
-	return core.NewTemplate(tc, pattern, data)
+func NewTemplate[T, U any](tc *core.TemplateContext[T], data U) *core.Templ[T, U] {
+	return core.NewTemplate(tc, data)
 }
 
+// Similar to NewTemplate, but allows a template to be created
+// that matches the provided pattern. The returned template
+// does not include base data when Render(*,*) is called, hence also does not rely on .B and .D
+//
+// No templates get parsed until loadr.Validate() is run
 func NewSubTemplate[T, U any](tc *core.TemplateContext[T], pattern string, data U) *core.Templ[T, U] {
 	return core.NewSubTemplate(tc, pattern, data)
 }
 
 // Loads and validates all the created templates.
-// It is expected to be called after all the templates and settings have been created
+// It must be called after all the templates and settings have been created
 func LoadTemplates() error {
 	return registry.LoadTemplates()
 }

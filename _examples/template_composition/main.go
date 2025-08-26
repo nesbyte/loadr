@@ -43,11 +43,11 @@ type IndexData struct {
 // functionality will automatically parse the relevant templates under the hood as long as they are
 // passed in WithTemplates
 // WithTemplates does not mutate the base template, it returns a new one
-var indexWithComposition1 = loadr.NewTemplate(base.WithTemplates("composition1/*.html"), "index.html", IndexData{})
-var indexWithComposition2 = loadr.NewTemplate(base.WT("composition2/*.html"), "index.html", IndexData{})
+var indexWithComposition1 = loadr.NewTemplate(base.WithTemplates("composition1/*.html"), IndexData{})
+var indexWithComposition2 = loadr.NewTemplate(base.WT("composition2/*.html"), IndexData{})
 
 // Again highlighting that the base template is not mutated when with templates is used
-var index = loadr.NewTemplate(base, "index.html", loadr.NoData)
+var index = loadr.NewTemplate(base, loadr.NoData)
 
 // Bringing it all together below
 func main() {

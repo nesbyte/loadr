@@ -44,7 +44,7 @@ type IndexData struct {
 
 // This extracts the template of interest from base, and provides
 // The template specific data type
-var index = loadr.NewTemplate(base, "index.html", IndexData{})
+var index = loadr.NewTemplate(base, IndexData{})
 
 // Some data for the content template
 type ContentData struct {
@@ -52,7 +52,7 @@ type ContentData struct {
 }
 
 // Extracts another template of interest with it's specific data type
-var content = loadr.NewTemplate(base, "content", ContentData{})
+var content = loadr.NewSubTemplate(base, "content", ContentData{})
 
 // Bringing it all together below
 func main() {
@@ -111,7 +111,6 @@ func main() {
 		// earlier on.
 		// If you want to handle io.Writer errors, the suggested approach is to
 		// wrap your io.Writer in a custom writer that returns an error
-		w.Header().Set("Content-Length", "0")
 		index.Render(w, IndexData{"Alice", "Index Injected Content"})
 
 		// If you want to handle io.Writer errors, the suggested approach is to

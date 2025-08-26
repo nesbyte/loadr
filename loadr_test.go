@@ -69,32 +69,32 @@ func TestCase1PartialsFromWithTemplates(t *testing.T) {
 
 	table := []testScenario{
 		{"get input.html with partial1",
-			NewTemplate(p1, "input.html",
-				case1Partial1{}),
+			NewTemplate(p1,
+				case1Partial1{Sample: ""}),
 			"want.input1.html",
 			nil},
 		{"get partial as partial1.html, should return empty",
-			NewTemplate(p1, "input.partial1.html", case1Partial1{}),
+			NewSubTemplate(p1, "input.partial1.html", case1Partial1{}),
 			"want.empty.html",
 			nil},
 		{"get partial as partial1",
-			NewTemplate(p1, "partial", case1Partial1{}),
+			NewSubTemplate(p1, "partial", case1Partial1{}),
 			"want.partial1.html",
 			nil},
 		{"get partial as partial1 with wrong data format",
-			NewTemplate(p1, "partial", case1Partial2{}),
+			NewSubTemplate(p1, "partial", case1Partial2{}),
 			"",
 			core.ErrInvalidTemplateData},
 		{"get input.html with partial2",
-			NewTemplate(p2, "input.html", case1Partial2{}),
+			NewTemplate(p2, case1Partial2{}),
 			"want.input2.html",
 			nil},
 		{"get partial as partial2",
-			NewTemplate(p2, "partial", case1Partial2{}),
+			NewSubTemplate(p2, "partial", case1Partial2{}),
 			"want.partial2.html",
 			nil},
 		{"get input.html with partial3",
-			NewTemplate(p3, "partial", []string{}),
+			NewSubTemplate(p3, "partial", []string{}),
 			"want.partial3.html",
 			nil},
 	}
@@ -193,7 +193,7 @@ func TestRenderWithWriterError(t *testing.T) {
 		"input.partial1.html",
 	)
 
-	p1 := NewTemplate(b, "input.html", case1Partial1{})
+	p1 := NewTemplate(b, case1Partial1{})
 
 	err := LoadTemplates()
 	if err != nil {
@@ -236,8 +236,8 @@ func TestBaseCopy(t *testing.T) {
 	cp := b.Copy()
 	cp.SetBaseTemplates("input.partial2.html")
 
-	_ = NewTemplate(b, "input.partial1.html", case1Partial1{})
-	_ = NewTemplate(cp, "input.partial2.html", case1Partial2{})
+	_ = NewTemplate(b, case1Partial1{})
+	_ = NewTemplate(cp, case1Partial2{})
 
 	err := LoadTemplates()
 	if err != nil {
@@ -245,7 +245,7 @@ func TestBaseCopy(t *testing.T) {
 	}
 
 	// And prove that there is no input.partial1.html
-	_ = NewTemplate(cp, "input.partial1.html", case1Partial2{})
+	_ = NewSubTemplate(cp, "input.partial1.html", case1Partial2{})
 	err = LoadTemplates()
 	if err == nil {
 		t.Error("expected error, input.partial1.html should not exist")
@@ -265,7 +265,7 @@ func TestBaseDataImmediatePropagation(t *testing.T) {
 
 	defer registry.Reset()
 	b := NewTemplateContext(BaseConfig{FS: caseFS}, caseData{1}, "input.emptydata.html")
-	templ := NewTemplate(b, "input.emptydata.html", NoData)
+	templ := NewTemplate(b, NoData)
 
 	err := LoadTemplates()
 	if err != nil {
@@ -321,7 +321,7 @@ func TestFuncMapFunctionality(t *testing.T) {
 		"input.html",
 	).Funcs(funcMap)
 
-	index := NewTemplate(base, "input.html", upperData{"test"})
+	index := NewTemplate(base, upperData{"test"})
 
 	err := LoadTemplates()
 	if err != nil {

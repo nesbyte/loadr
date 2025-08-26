@@ -12,12 +12,12 @@
 <body>
     {{template "nav"}}
     <h1>Hello {{.D.Name}}!!</h1>
-    {{ template "content" . }}
+    {{ template "content" .D }}
     <p>Click <a href="./content">here</a> to render only the content template</p>
 </body>
 
 </html>
 
 {{ define "content" }}
-<p>{{customFunc .D.Content}}</p>
+<p>{{customFunc .Content}}</p>
 {{ end }}
