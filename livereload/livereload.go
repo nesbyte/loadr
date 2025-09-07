@@ -1,13 +1,16 @@
 package livereload
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"errors"
 	"fmt"
+	"html/template"
 	"io/fs"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sync"
 	"time"
@@ -41,53 +44,80 @@ func broadcast(msg string) {
 	}
 }
 
-type ReloadHandler func(fsnotify.Event, error)
+var customReloadHandler func(fsnotify.Event, error)
 
-var customReloadHandler ReloadHandler
-
-func LiveReloadCustomErrorHandler(err error) {
+// Allows custom error handling from outside the livereload package
+func Notify(err error) {
 	customReloadHandler(fsnotify.Event{}, err)
 }
 
-func RunLiveReload(handlePattern string, handleReload ReloadHandler, pathsToWatch ...string) (http.HandlerFunc, context.CancelFunc, error) {
+// Helper function for LiveReload to perform logging when a reload occurs
+func HandleReload(e fsnotify.Event, err error) {
+	t := time.Now().Format("15:04:05")
+	if err == nil {
+		fmt.Printf("\033[90m[%s]\033[32m reloaded: %s\033[0m\n", t, e.Name)
+	} else {
+		fmt.Printf("\033[90m[%s]\033[31m error: %s\033[0m\n", t, err.Error())
+	}
+}
+
+func RunLiveReload(handlePattern string, handleReload func(fsnotify.Event, error), pathsToWatch ...string) (http.HandlerFunc, error) {
 
 	liveServerMu.Lock()
 	defer liveServerMu.Unlock()
 
 	if liveServerStarted {
-		return nil, nil, errors.New("live reload is already running")
-	}
-	liveServerStarted = true
-
-	if handlePattern == "" {
-		return nil, nil, errors.New("handlePattern can not be empty")
+		return nil, errors.New("live reload is already running")
+	} else {
+		liveServerStarted = true
 	}
 
 	if handleReload == nil {
-		return nil, nil, errors.New("handleChange must be set in order to propagate errors, feel free to use loadr.HandleChange as a helper")
+		customReloadHandler = HandleReload
 	} else {
 		customReloadHandler = handleReload
 	}
 
-	bs, err := liveReloaderHTML.ReadFile("liveReloader.html")
+	// Parse the live reloader
+	t, err := template.ParseFS(liveReloaderHTML, "liveReloader.html")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	registry.SetJSToInject(bs)
+	var buf bytes.Buffer
+	err = t.Execute(&buf, template.JS(handlePattern))
+	if err != nil {
+		return nil, err
+	}
+	registry.SetJSToInject(buf.Bytes())
 
+	// New watcher instance
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// Recursively adds directories to the watcher
 	err = walkDirsAndAddPaths(watcher, pathsToWatch)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go runWatcher(ctx, watcher, handleReload)
+	// Handle interrupt signal to gracefully shutdown the watcher
+	// and forward the signal to the main process
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		sig := <-c
+		cancel()
+		signal.Stop(c)
+		close(c)
+		signal.Reset(os.Interrupt)
+		p, _ := os.FindProcess(os.Getpid())
+		_ = p.Signal(sig)
+	}()
+
+	go runWatcher(ctx, watcher, customReloadHandler)
 
 	// Build up the HTTP handler function
 	handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +165,7 @@ func RunLiveReload(handlePattern string, handleReload ReloadHandler, pathsToWatc
 	// Register live reloading with the validator
 	registry.SetLiveReload(true)
 
-	return handlerFunc, cancel, nil
+	return handlerFunc, nil
 }
 
 // fsnotify does not support recursive directory watching,
@@ -199,9 +229,7 @@ func runWatcher(ctx context.Context, watcher *fsnotify.Watcher, handleChange fun
 			if event.Has(fsnotify.Create) {
 				fi, err := os.Stat(event.Name)
 				if err != nil {
-					if handleChange != nil {
-						handleChange(fsnotify.Event{}, err)
-					}
+					handleChange(fsnotify.Event{}, err)
 					continue
 				}
 
@@ -219,9 +247,7 @@ func runWatcher(ctx context.Context, watcher *fsnotify.Watcher, handleChange fun
 			}
 
 			batchTimer = time.AfterFunc(batchDelay, func() {
-				if handleChange != nil {
-					handleChange(event, nil)
-				}
+				handleChange(event, nil)
 
 				// Trigger a reload event
 				broadcast("data: reload\n\n")
@@ -231,9 +257,7 @@ func runWatcher(ctx context.Context, watcher *fsnotify.Watcher, handleChange fun
 				return
 			}
 
-			if handleChange != nil {
-				handleChange(fsnotify.Event{}, err)
-			}
+			handleChange(fsnotify.Event{}, err)
 
 			// Trigger a reload event
 			broadcast(fmt.Sprintf("data: live reload error: %s\n\n", err.Error()))

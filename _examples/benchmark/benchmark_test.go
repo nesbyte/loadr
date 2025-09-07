@@ -98,11 +98,7 @@ var once sync.Once
 // Using loadr with live reload enabled
 func BenchmarkLoadrWithLiveReload(b *testing.B) {
 	once.Do(func() {
-		_, _, err := loadr.RunLiveReload("/event", loadr.HandleReload, ".")
-		if err != nil {
-			b.Fatal(err)
-		}
-
+		loadr.MustRunLiveReload("/event", nil, ".")
 	})
 
 	t := loadr.NewTemplate(base, testData{})

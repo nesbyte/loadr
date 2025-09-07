@@ -288,16 +288,14 @@ func TestBaseDataImmediatePropagation(t *testing.T) {
 }
 
 func TestLiveReloadCallTwice(t *testing.T) {
-	_, cancel, err := RunLiveReload("/live-reload", HandleReload, "testdata")
+	_, err := RunLiveReload("/live-reload", nil, "testdata")
 	if err != nil {
 		t.Error(err)
 	}
-	defer cancel()
 
-	_, cancel, err = RunLiveReload("/live-reload2", HandleReload, "testdata")
+	_, err = RunLiveReload("/live-reload2", nil, "testdata")
 	if err == nil {
 		t.Error("want error, live reload cannot be called twice")
-		defer cancel()
 	}
 
 }

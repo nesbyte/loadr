@@ -71,7 +71,7 @@ func main() {
 	// If you run the server feel free to change the index.html, save and see the page
 	// update on the fly without needing to recompile!
 	// Breaking the fields provide verbose error messages
-	liveReload := false
+	liveReload := true
 	if liveReload {
 
 		// In dev, use the os filesystem instead of the embedded one
@@ -83,16 +83,7 @@ func main() {
 
 		// Live reload takes in the pattern of which the HTTP server will listen on (/live-reload)
 		// and allows some insertion of custom logic of what to do if a file has changed.
-		// HandleReload is a default setup that simply prints out reloaded files or errors
-		// pathsToWatch will recursively watch all files and folders inside itself
-		lsHandler, lsClose, err := loadr.RunLiveReload("/live-reload", loadr.HandleReload, ".")
-		if err != nil {
-			log.Fatalln(err)
-		}
-		defer lsClose() // Not strictly necessary, but cleans things up inside the live reloader
-
-		// use the handler provided by the LiveReload function.
-		r.Handle("/live-reload", lsHandler)
+		r.Handle("/live-reload", loadr.MustRunLiveReload("/live-reload", nil, "."))
 
 	}
 

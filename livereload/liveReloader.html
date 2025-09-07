@@ -1,6 +1,6 @@
-<!-- loadr live reloader automatically injected by Render() when LiveReload is set-->
+<!-- automatically injected by loadr live reloader-->
 <script>
-    const eventSource = new EventSource('/live-reload');
+    const eventSource = new EventSource("{{.}}");
 
     eventSource.onmessage = function (event) {
         if (event.data === 'reload') {

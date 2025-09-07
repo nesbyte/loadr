@@ -167,7 +167,7 @@ func (t *SubTemplate[U]) load(data any) error {
 
 	// Parse and cache the template
 	var err error
-	t.t, err = template.New("").Funcs(t.ctx.funcMap).ParseFS(t.ctx.config.FS, patterns...)
+	t.t, err = template.New("").Funcs(*t.ctx.funcMap).ParseFS(t.ctx.config.FS, patterns...)
 	if err != nil {
 		return TemplateError{t.ctx, t.usePattern, fmt.Errorf("%w: %v", ErrTemplateParse, err)}
 	}
@@ -230,7 +230,7 @@ func (t *SubTemplate[U]) render(w io.Writer, d any) {
 	// Reload the component
 	err := t.load(d)
 	if err != nil {
-		livereload.LiveReloadCustomErrorHandler(err)
+		livereload.Notify(err)
 
 		// To allow for SSE to work even if the template fails to load,
 		// the bare JS must be injected to allow for reconnection

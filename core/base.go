@@ -10,6 +10,7 @@ func NewTemplateContext[T any](baseConfig BaseConfig, baseData T, basePatterns .
 		templateContextCore: templateContextCore{
 			config:        &baseConfig,
 			baseTemplates: basePatterns,
+			funcMap:       &template.FuncMap{},
 		},
 		baseData: &baseData,
 	}
@@ -27,8 +28,8 @@ type templateContextCore struct {
 	config        *BaseConfig
 	baseTemplates []string // The base templates that are used and settable
 	withTemplates []string
-	onLoad        func() error     // If set, called before the templates are loaded
-	funcMap       template.FuncMap // Functions that will be added to the templates
+	onLoad        func() error      // If set, called before the templates are loaded
+	funcMap       *template.FuncMap // Functions that will be added to the templates
 }
 
 // Performs a shallow copy equivalent of TemplateContext
@@ -121,6 +122,6 @@ func (tc *TemplateContext[T]) SetOnTemplateLoad(onLoad func() error) {
 // Adds the FuncMap functions to the template context using the
 // std template.FuncMap type
 func (tc *TemplateContext[T]) Funcs(funcMap template.FuncMap) *TemplateContext[T] {
-	tc.funcMap = funcMap
+	*tc.funcMap = funcMap
 	return tc
 }
