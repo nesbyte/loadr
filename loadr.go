@@ -33,7 +33,7 @@ const NoData = 0
 // for the loading and validation when loadr.LoadTemplates() is called.
 //
 // No templates get parsed until loadr.Validate() is run
-func NewTemplate[T, U any](tc *core.TemplateContext[T], data U) *core.Templ[T, U] {
+func NewTemplate[T, U any](tc *core.TemplateContext[T], data U) *core.Template[T, U] {
 	return core.NewTemplate(tc, data)
 }
 
@@ -42,7 +42,7 @@ func NewTemplate[T, U any](tc *core.TemplateContext[T], data U) *core.Templ[T, U
 // does not include base data when Render(*,*) is called, hence also does not rely on .B and .D
 //
 // No templates get parsed until loadr.Validate() is run
-func NewSubTemplate[T, U any](tc *core.TemplateContext[T], pattern string, data U) *core.Templ[T, U] {
+func NewSubTemplate[T, U any](tc *core.TemplateContext[T], pattern string, data U) *core.SubTemplate[U] {
 	return core.NewSubTemplate(tc, pattern, data)
 }
 

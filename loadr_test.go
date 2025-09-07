@@ -31,9 +31,15 @@ type case1Partial2 struct {
 	Sample2 string
 }
 
+type Renderable interface {
+	Load() error
+	Render(w io.Writer, data any)
+}
+
 type testScenario struct {
 	name      string
-	input     any
+	input     Renderable
+	data      any
 	wantId    string
 	wantError error
 }
@@ -67,34 +73,43 @@ func TestCase1PartialsFromWithTemplates(t *testing.T) {
 	p3 := b.WithTemplates("input.partial3.html")
 	defer registry.Reset()
 
+	// any is used in the New*Template() to avoid type issues in the table test
+	// since the data types are different
 	table := []testScenario{
 		{"get input.html with partial1",
 			NewTemplate(p1,
-				case1Partial1{Sample: ""}),
+				any(case1Partial1{Sample: ""})),
+			case1Partial1{""},
 			"want.input1.html",
 			nil},
 		{"get partial as partial1.html, should return empty",
-			NewSubTemplate(p1, "input.partial1.html", case1Partial1{}),
+			NewSubTemplate(p1, "input.partial1.html", any(case1Partial1{})),
+			case1Partial1{""},
 			"want.empty.html",
 			nil},
 		{"get partial as partial1",
-			NewSubTemplate(p1, "partial", case1Partial1{}),
+			NewSubTemplate(p1, "partial", any(case1Partial1{})),
+			case1Partial1{},
 			"want.partial1.html",
 			nil},
 		{"get partial as partial1 with wrong data format",
-			NewSubTemplate(p1, "partial", case1Partial2{}),
+			NewSubTemplate(p1, "partial", any(case1Partial2{})),
+			case1Partial2{},
 			"",
-			core.ErrInvalidTemplateData},
+			core.ErrTemplateExecute},
 		{"get input.html with partial2",
-			NewTemplate(p2, case1Partial2{}),
+			NewTemplate(p2, any(case1Partial2{})),
+			case1Partial2{},
 			"want.input2.html",
 			nil},
 		{"get partial as partial2",
-			NewSubTemplate(p2, "partial", case1Partial2{}),
+			NewSubTemplate(p2, "partial", any(case1Partial2{})),
+			case1Partial2{},
 			"want.partial2.html",
 			nil},
 		{"get input.html with partial3",
-			NewSubTemplate(p3, "partial", []string{}),
+			NewSubTemplate(p3, "partial", any([]string{})),
+			[]string{},
 			"want.partial3.html",
 			nil},
 	}
@@ -106,26 +121,12 @@ func TestCase1PartialsFromWithTemplates(t *testing.T) {
 
 		wr.Reset()
 
-		switch v := scenario.input.(type) {
-		case *core.Templ[case1BaseData, case1Partial1]:
-			err := v.Load()
-			if !scenario.ShouldRender(t, err) {
-				continue
-			}
-			v.Render(wr, case1Partial1{}) // renders
-		case *core.Templ[case1BaseData, case1Partial2]:
-			err := v.Load()
-			if !scenario.ShouldRender(t, err) {
-				continue
-			}
-			v.Render(wr, case1Partial2{})
-		case *core.Templ[case1BaseData, []string]:
-			err := v.Load()
-			if !scenario.ShouldRender(t, err) {
-				continue
-			}
-			v.Render(wr, []string{})
+		err := scenario.input.Load()
+		if !scenario.ShouldRender(t, err) {
+			continue
 		}
+		scenario.input.Render(wr, scenario.data) // renders
+
 		testContent := wr.String()
 
 		// Gets or creates the golden file

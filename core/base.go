@@ -7,17 +7,24 @@ import (
 
 func NewTemplateContext[T any](baseConfig BaseConfig, baseData T, basePatterns ...string) *TemplateContext[T] {
 	return &TemplateContext[T]{
-		config:        &baseConfig,
-		baseData:      &baseData,
-		baseTemplates: basePatterns}
+		templateContextCore: templateContextCore{
+			config:        &baseConfig,
+			baseTemplates: basePatterns,
+		},
+		baseData: &baseData,
+	}
 }
 
 // The Base render is the main data structure
 // which the templates are using internally for their rendering through
 // composition.
 type TemplateContext[T any] struct {
+	templateContextCore
+	baseData *T
+}
+
+type templateContextCore struct {
 	config        *BaseConfig
-	baseData      *T
 	baseTemplates []string // The base templates that are used and settable
 	withTemplates []string
 	onLoad        func() error     // If set, called before the templates are loaded
@@ -35,11 +42,13 @@ func (tc *TemplateContext[T]) Copy(patterns ...string) *TemplateContext[T] {
 	bt := append([]string(nil), tc.baseTemplates...)
 	at := append([]string(nil), tc.withTemplates...)
 	newTemplateContext := TemplateContext[T]{
-		config:        tc.config,
-		baseData:      tc.baseData,
-		baseTemplates: bt,
-		withTemplates: at,
-		funcMap:       tc.funcMap,
+		templateContextCore: templateContextCore{
+			config:        tc.config,
+			baseTemplates: bt,
+			withTemplates: at,
+			funcMap:       tc.funcMap,
+		},
+		baseData: tc.baseData,
 	}
 
 	return &newTemplateContext
@@ -68,7 +77,7 @@ func (tc TemplateContext[T]) Config() BaseConfig {
 // call is used.
 // This works immediately and independently from calling loadr.LoadTemplates()
 func (tc *TemplateContext[T]) SetBaseData(data T) *TemplateContext[T] {
-	tc.baseData = &data
+	*tc.baseData = data
 	return tc
 }
 

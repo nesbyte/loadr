@@ -13,55 +13,29 @@ import (
 	"github.com/nesbyte/loadr/registry"
 )
 
-func NewTemplate[T, U any](tc *TemplateContext[T], data U) *Templ[T, U] {
-	t := Templ[T, U]{tc: tc, data: data, usePattern: "", useBaseData: true}
+var ErrTemplateExecute = errors.New("template execute error")
 
-	registry.Add(&t)
-
-	return &t
+// TemplateError is the error type returned by the template loading and rendering
+// functions. It wraps the underlying error and provides context about the
+// template patterns used.
+type TemplateError struct {
+	ctx        templateContextCore
+	usePattern string
+	Err        error
 }
 
-func NewSubTemplate[T, U any](tc *TemplateContext[T], pattern string, data U) *Templ[T, U] {
-	t := Templ[T, U]{tc: tc, data: data, usePattern: pattern, useBaseData: false}
-
-	registry.Add(&t)
-
-	return &t
+func (e TemplateError) Error() string {
+	return fmt.Sprintf("basetemplates %q with templates %q and template pattern %q failed: %s", e.ctx.baseTemplates, strings.Join(e.ctx.withTemplates, ", "), e.usePattern, e.Err.Error())
 }
 
-type Templ[T, U any] struct {
-	t           *template.Template
-	tc          *TemplateContext[T]
-	useBaseData bool
-	data        U
-	usePattern  string
-}
-
-var ErrNoBaseOrPatternFound = errors.New("no basetemplate nor patterns have been provided")
-var ErrNoBasePatternFound = errors.New("no basetemplate has been provided, but NewTemplate was called")
-
-type LoadingError struct {
-	BaseTemplates []string
-	WithTemplates []string
-	UsePattern    string
-	Err           error
-}
-
-func (e LoadingError) Error() string {
-	return fmt.Sprintf("basetemplates %q with templates %q and template pattern %q failed: %s", e.BaseTemplates, strings.Join(e.WithTemplates, ", "), e.UsePattern, e.Err.Error())
-}
-
-func (e LoadingError) Unwrap() error {
+func (e TemplateError) Unwrap() error {
 	return e.Err
 }
 
-func newLoadingError[T, U any](t *Templ[T, U], err error) error {
-	return &LoadingError{t.tc.baseTemplates, t.tc.withTemplates, t.usePattern, err}
+type Template[T, U any] struct {
+	SubTemplate[U]
+	baseData *T
 }
-
-var ErrNoConfigProvided = errors.New("no config provided")
-var ErrTemplateParse = errors.New("template parse error")
-var ErrInvalidTemplateData = errors.New("invalid template data")
 
 // Base data used to define the data passed in to the
 // template
@@ -70,62 +44,36 @@ type BaseData[T any, U any] struct {
 	D U // Data passed in explicitly by the Render(data) call
 }
 
+func NewTemplate[T, U any](tc *TemplateContext[T], data U) *Template[T, U] {
+	t := Template[T, U]{
+		SubTemplate: SubTemplate[U]{
+			ctx:  tc.templateContextCore,
+			data: data,
+		},
+		baseData: tc.baseData,
+	}
+
+	registry.Add(&t)
+
+	return &t
+}
+
+var ErrNoBasePatternFound = errors.New("no basetemplate has been provided, but NewTemplate was called")
+
 // Loads, validates and registers the template.
 // This should rarely be called directly
-func (t *Templ[T, U]) Load() error {
-	// Immeditately run on load
-	if t.tc.onLoad != nil {
-		err := t.tc.onLoad()
-		if err != nil {
-			return err
-		}
+func (t *Template[T, U]) Load() error {
+
+	if len(t.ctx.baseTemplates) == 0 {
+		return TemplateError{t.ctx, t.usePattern, ErrNoBasePatternFound}
 	}
+	t.usePattern = t.ctx.baseTemplates[0]
 
-	if t.tc.config == nil {
-		return ErrNoConfigProvided
+	err := t.load(BaseData[T, U]{B: *t.baseData, D: t.data})
+	if errors.Is(err, ErrTemplateExecute) {
+		return fmt.Errorf("%w: has .B or .D prefix been included for this Template?", err)
 	}
-
-	patterns := []string{}
-	patterns = append(patterns, t.tc.baseTemplates...)
-	patterns = append(patterns, t.tc.withTemplates...)
-
-	if len(patterns) == 0 {
-		return newLoadingError(t, ErrNoBaseOrPatternFound)
-	}
-
-	// Parse and cache the template
-	var err error
-	t.t, err = template.New("").Funcs(t.tc.funcMap).ParseFS(t.tc.config.FS, patterns...)
-	if err != nil {
-		return newLoadingError(t, fmt.Errorf("%w: %v", ErrTemplateParse, err))
-	}
-
-	// Try to execute the template using the sample data provided
-	var d any
-	if t.useBaseData {
-		d = BaseData[T, U]{B: *t.tc.baseData, D: t.data}
-
-		if len(t.tc.baseTemplates) == 0 {
-			return newLoadingError(t, ErrNoBasePatternFound)
-		} else {
-			t.usePattern = t.tc.baseTemplates[0]
-		}
-	} else {
-		d = t.data
-	}
-
-	bs := []byte{}
-	w := bytes.NewBuffer(bs)
-	err = t.t.ExecuteTemplate(w, t.usePattern, d)
-	if err != nil {
-		if t.useBaseData {
-			return newLoadingError(t, fmt.Errorf("%w has a .B or .D prefix been included for the field?: %v", ErrInvalidTemplateData, err))
-		} else {
-			return newLoadingError(t, fmt.Errorf("%w .B and/or .D must not be provided as base data is not provided: %v", ErrInvalidTemplateData, err))
-		}
-	}
-
-	return nil
+	return err
 }
 
 // Renders the template to a writer with the base data
@@ -160,20 +108,78 @@ func (t *Templ[T, U]) Load() error {
 //
 //		return n, err
 //		}
-func (t *Templ[T, U]) Render(w io.Writer, data U) {
-	err := t.render(w, data)
-	if err != nil {
-		if errors.As(err, &LoadingError{}) {
-			panic(err) // this should never happen as the template should have been validated
-		}
+func (t *Template[T, U]) Render(w io.Writer, data U) {
+	d := BaseData[T, U]{B: *t.baseData, D: data}
+	t.render(w, d)
+}
 
-		switch err {
-		case http.ErrBodyNotAllowed, http.ErrHijacked, http.ErrContentLength:
-			panic(err) // these are edgecase implementation bugs on the server, panic to notify implementation
-		}
+type SubTemplate[U any] struct {
+	t          *template.Template
+	ctx        templateContextCore
+	usePattern string
+	data       U
+}
 
-		// Ignore any other error, such as io.Writer errors
+func NewSubTemplate[T, U any](tc *TemplateContext[T], pattern string, data U) *SubTemplate[U] {
+	t := SubTemplate[U]{
+		ctx:        tc.templateContextCore,
+		data:       data,
+		usePattern: pattern,
 	}
+
+	registry.Add(&t)
+
+	return &t
+}
+
+func (t *SubTemplate[U]) Load() error {
+	return t.load(t.data)
+}
+
+func (t *SubTemplate[U]) Render(w io.Writer, data U) {
+	t.render(w, data)
+}
+
+var ErrNoConfigProvided = errors.New("no config provided")
+var ErrNoBaseOrPatternFound = errors.New("no basetemplate nor patterns have been provided")
+var ErrTemplateParse = errors.New("template parse error")
+
+func (t *SubTemplate[U]) load(data any) error {
+	// Immeditately run on load
+	if t.ctx.onLoad != nil {
+		err := t.ctx.onLoad()
+		if err != nil {
+			return err
+		}
+	}
+
+	if t.ctx.config == nil {
+		return ErrNoConfigProvided
+	}
+
+	patterns := []string{}
+	patterns = append(patterns, t.ctx.baseTemplates...)
+	patterns = append(patterns, t.ctx.withTemplates...)
+
+	if len(patterns) == 0 {
+		return TemplateError{t.ctx, "", ErrNoBaseOrPatternFound}
+	}
+
+	// Parse and cache the template
+	var err error
+	t.t, err = template.New("").Funcs(t.ctx.funcMap).ParseFS(t.ctx.config.FS, patterns...)
+	if err != nil {
+		return TemplateError{t.ctx, t.usePattern, fmt.Errorf("%w: %v", ErrTemplateParse, err)}
+	}
+
+	var buf bytes.Buffer
+	err = t.t.ExecuteTemplate(&buf, t.usePattern, data)
+	if err != nil {
+		return TemplateError{t.ctx, t.usePattern, fmt.Errorf("%w: %v", ErrTemplateExecute, err)}
+	}
+
+	return nil
+
 }
 
 type failWriter struct {
@@ -191,51 +197,56 @@ func (fw *failWriter) Write(p []byte) (int, error) {
 	}
 
 	n, err := fw.w.Write(p)
-	if err != nil {
+	switch err {
+	case http.ErrBodyNotAllowed, http.ErrHijacked, http.ErrContentLength:
+		// these are edgecase implementation bugs on the server, panic to notify implementation
 		fw.err = err
+	case nil:
+		fw.err = nil
+	default:
+		// Any other error is likely a client disconnect, ignore it
+		fw.err = nil
 	}
 
-	return n, err
+	return n, fw.err
 }
 
 // render is the actual implementation to render the template.
-func (t *Templ[T, U]) render(w io.Writer, data U) error {
+func (t *SubTemplate[U]) render(w io.Writer, d any) {
 
 	fw := &failWriter{w: w}
-	var d any
-	if t.useBaseData {
-		d = BaseData[T, U]{B: *t.tc.baseData, D: data}
-	} else {
-		d = data
-	}
 
 	// Without reload, rendering is short and simple
 	if !registry.LiveReload() {
 		err := t.t.ExecuteTemplate(fw, t.usePattern, d)
-		if fw.err != nil {
-			return fw.err
-		}
 		if err != nil {
-			// This should never happen as the template has been validated and should be handeled as a panic
-			return &LoadingError{t.tc.baseTemplates, t.tc.withTemplates, t.usePattern, fmt.Errorf("execute template error in render %s", err)}
+			// Panics if the template fails to be written due to a server error
+			panic(&TemplateError{t.ctx, t.usePattern, fmt.Errorf("%w %s", ErrTemplateExecute, err)})
 		}
-		return nil
+
+		return
 	}
 
 	// Reload the component
-	err := t.Load()
+	err := t.load(d)
 	if err != nil {
 		livereload.LiveReloadCustomErrorHandler(err)
+
+		// To allow for SSE to work even if the template fails to load,
+		// the bare JS must be injected to allow for reconnection
 		_, err := fw.Write([]byte(registry.JSToInject()))
-		return err
+		if err != nil {
+			panic(&TemplateError{t.ctx, t.usePattern, fmt.Errorf("%w %s", ErrTemplateExecute, err)})
+		}
+
+		return
 	}
 
-	// Capture the output to a buffer to inject the necessary JS
 	var buf bytes.Buffer
+	// Capture the output to a buffer to inject the necessary JS
 	err = t.t.ExecuteTemplate(&buf, t.usePattern, d)
 	if err != nil {
-		// This should never happen as the template has been validated and should be handeled as a panic
-		return &LoadingError{t.tc.baseTemplates, t.tc.withTemplates, t.usePattern, fmt.Errorf("execute template error in render %s", err)}
+		panic(&TemplateError{t.ctx, t.usePattern, fmt.Errorf("%w %s", ErrTemplateExecute, err)})
 	}
 
 	html := buf.String()
@@ -244,7 +255,8 @@ func (t *Templ[T, U]) render(w io.Writer, data U) error {
 		html = html[:idx] + registry.JSToInject() + html[idx:]
 	}
 
-	_, err = w.Write([]byte(html))
-
-	return err
+	_, err = fw.Write([]byte(html))
+	if err != nil {
+		panic(&TemplateError{t.ctx, t.usePattern, fmt.Errorf("%w %s", ErrTemplateExecute, err)})
+	}
 }
