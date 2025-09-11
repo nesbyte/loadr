@@ -18,6 +18,7 @@ import (
 const case1Dir = "./testdata/case1"
 const case2Dir = "./testdata/case2"
 const case3Dir = "./testdata/case3"
+const case4Dir = "./testdata/case4"
 
 type case1BaseData struct {
 	Title string
@@ -332,5 +333,26 @@ func TestFuncMapFunctionality(t *testing.T) {
 
 	if b.String() != "TEST" {
 		t.Errorf("want: TEST\ngot: %s\n", b.String())
+	}
+}
+
+// Validates that nested base templates work as expected
+// this is a regression test as the html/template package
+// only uses the last element of a path as the template name
+func TestNestedBaseTempalte(t *testing.T) {
+	var (
+		caseFS = os.DirFS(case4Dir)
+	)
+
+	base := NewTemplateContext(
+		BaseConfig{FS: caseFS},
+		NoData,
+		"folder/index.html",
+	)
+	_ = NewTemplate(base, NoData)
+
+	err := LoadTemplates()
+	if err != nil {
+		t.Fatalf("loadtemplates failed: %s", err)
 	}
 }

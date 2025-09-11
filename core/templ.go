@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"text/template"
 
@@ -67,7 +68,7 @@ func (t *Template[T, U]) Load() error {
 	if len(t.ctx.baseTemplates) == 0 {
 		return TemplateError{t.ctx, t.usePattern, ErrNoBasePatternFound}
 	}
-	t.usePattern = t.ctx.baseTemplates[0]
+	t.usePattern = filepath.Base(t.ctx.baseTemplates[0])
 
 	err := t.load(BaseData[T, U]{B: *t.baseData, D: t.data})
 	if errors.Is(err, ErrTemplateExecute) {
