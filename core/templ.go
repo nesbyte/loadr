@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
-	"text/template"
 
 	"github.com/nesbyte/loadr/livereload"
 	"github.com/nesbyte/loadr/registry"
