@@ -114,6 +114,16 @@ func (t *Template[T, U]) Render(w io.Writer, data U) {
 	t.render(w, d)
 }
 
+// HandleFunc returns an http.HandlerFunc that renders the template
+// with the data provided when the Template was created.
+// This is a convenience function to quickly create handlers
+// for http servers.
+func (t *Template[T, U]) HandlerFunc() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		t.Render(w, t.data)
+	}
+}
+
 type SubTemplate[U any] struct {
 	t          *template.Template
 	ctx        templateContextCore
@@ -139,6 +149,16 @@ func (t *SubTemplate[U]) Load() error {
 
 func (t *SubTemplate[U]) Render(w io.Writer, data U) {
 	t.render(w, data)
+}
+
+// HandleFunc returns an http.HandlerFunc that renders the template
+// with the data provided when the Template was created.
+// This is a convenience function to quickly create handlers
+// for http servers.
+func (t *SubTemplate[U]) HandlerFunc() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		t.Render(w, t.data)
+	}
 }
 
 var ErrNoConfigProvided = errors.New("no config provided")

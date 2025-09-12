@@ -65,10 +65,13 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	// The rendering is called in here
-	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		index.Render(w, loadr.NoData)
-	})
+	// BELOW IS THE COMPARISON BETWEEN PREVIOUS AND PROPOSED BEHAVIOUR
+
+	// r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	// 	index.Render(w, loadr.NoData)
+	// })
+
+	r.HandleFunc("/", index.HandlerFunc())
 
 	r.HandleFunc("/composition1", func(w http.ResponseWriter, r *http.Request) {
 		// Notice that using the composition does not really incur any extra
