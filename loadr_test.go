@@ -356,3 +356,24 @@ func TestNestedBaseTempalte(t *testing.T) {
 		t.Fatalf("loadtemplates failed: %s", err)
 	}
 }
+
+// Validates that SetConfig propagaes to Templates which have
+// already been defined
+func TestSetConfig(t *testing.T) {
+	var (
+		caseFS = os.DirFS(case4Dir)
+	)
+
+	base := NewTemplateContext(core.BaseConfig{FS: os.DirFS("fake")}, "", "folder/index.html")
+
+	// The above "fake" dir doesn't have the index file, hence should error
+	NewTemplate(base, "")
+
+	// However, correcting the SetConfig as below and the LoadTemplates should work
+	base.SetConfig(core.BaseConfig{FS: caseFS})
+
+	err := LoadTemplates()
+	if err != nil {
+		t.Error(err)
+	}
+}

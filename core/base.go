@@ -64,7 +64,7 @@ type BaseConfig struct {
 // If SetConfig is called multiple times on the same
 // base render, the last call is used
 func (tc *TemplateContext[T]) SetConfig(config BaseConfig) *TemplateContext[T] {
-	tc.config = &config
+	*tc.config = config
 	return tc
 }
 
