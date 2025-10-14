@@ -7,11 +7,11 @@ loadr is a library which extends the functionality of the standard html/template
 3. Shared data can easily be set between templates (for things such as cache busting)
 4. Optional *live reload* capability (like VSCode's live server), any changes to watched files automatically refreshes the browser without needing recompilation
 5. Simplifies layout, partials and component based templating
-6. Uses std lib html/templates under the hood
-7. *No performance penalty* compared to std lib, check micro-benchmarks in [_examples](_examples)
+6. Thin wrapper around the  std lib html/templates
+7. *Neglible performance penalty* compared to std lib, check micro-benchmarks in [_examples](_examples)
 
 
-The library draws inspiration from [this article](https://philipptanlak.com/web-frontends-in-go/) and essentially solidifies the idea into a re-usable pattern across projects.
+The library draws inspiration from [this article](https://philipptanlak.com/web-frontends-in-go/).
 
 # Install
 
