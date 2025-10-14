@@ -1,10 +1,16 @@
-package core
+package loadr
 
 import (
 	"html/template"
 	"io/fs"
 )
 
+// Creates a new template context acting as a base for any derived templates.
+//
+// All NewTemplateContext calls will use TemplateContext as their starting point.
+//
+// The baseData is used to define the data type passed in to the
+// template for the base data for all child templates.
 func NewTemplateContext[T any](baseConfig BaseConfig, baseData T, basePatterns ...string) *TemplateContext[T] {
 	return &TemplateContext[T]{
 		templateContextCore: templateContextCore{
@@ -15,6 +21,8 @@ func NewTemplateContext[T any](baseConfig BaseConfig, baseData T, basePatterns .
 		baseData: &baseData,
 	}
 }
+
+const NoData = 0
 
 // The Base render is the main data structure
 // which the templates are using internally for their rendering through

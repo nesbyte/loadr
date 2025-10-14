@@ -1,4 +1,4 @@
-package core
+package loadr
 
 import (
 	"bytes"
@@ -45,6 +45,13 @@ type BaseData[T any, U any] struct {
 	D U // Data passed in explicitly by the Render(data) call
 }
 
+// Lazily prepares the base template (the first template name provided in the basePattern of NewTemplateContext).
+// Base data as well as Render data will be passed in on Render(w, data) call as .B and .D respectively.
+//
+// The expected data structure which will be used by the Render(w, data) method should also be provided as it is used
+// for the loading and validation when loadr.LoadTemplates() is called.
+//
+// No templates get parsed until loadr.Validate() is run
 func NewTemplate[T, U any](tc *TemplateContext[T], data U) *Template[T, U] {
 	t := Template[T, U]{
 		SubTemplate: SubTemplate[U]{
@@ -89,8 +96,8 @@ func (t *Template[T, U]) Load() error {
 // Even if no base data has been provided, the template will be provided
 // in the above form. If live reloading is enabled, JS is injected at the end of the body.
 //
-// If handling io.Writer errors is required, it is suggested to wrap the io.Writer
-// in a custom writer that returns an error, for example:
+// If handling io.Writer errors or performing compression is required, it is suggested to wrap the io.Writer
+// in a custom writer to add further functionality, for example to get writer errors:
 //
 //	type wrapWriter struct {
 //		w   io.Writer
@@ -121,6 +128,11 @@ type SubTemplate[U any] struct {
 	data       U
 }
 
+// Similar to NewTemplate, but allows a template to be created
+// that matches the provided pattern. The returned template
+// does not include base data when Render(*,*) is called, hence also does not rely on .B and .D
+//
+// No templates get parsed until loadr.Validate() is run
 func NewSubTemplate[T, U any](tc *TemplateContext[T], pattern string, data U) *SubTemplate[U] {
 	t := SubTemplate[U]{
 		ctx:        tc.templateContextCore,

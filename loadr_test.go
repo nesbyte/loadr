@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nesbyte/loadr/core"
 	"github.com/nesbyte/loadr/registry"
 )
 
@@ -97,7 +96,7 @@ func TestCase1PartialsFromWithTemplates(t *testing.T) {
 			NewSubTemplate(p1, "partial", any(case1Partial2{})),
 			case1Partial2{},
 			"",
-			core.ErrTemplateExecute},
+			ErrTemplateExecute},
 		{"get input.html with partial2",
 			NewTemplate(p2, any(case1Partial2{})),
 			case1Partial2{},
@@ -364,13 +363,13 @@ func TestSetConfig(t *testing.T) {
 		caseFS = os.DirFS(case4Dir)
 	)
 
-	base := NewTemplateContext(core.BaseConfig{FS: os.DirFS("fake")}, "", "folder/index.html")
+	base := NewTemplateContext(BaseConfig{FS: os.DirFS("fake")}, "", "folder/index.html")
 
 	// The above "fake" dir doesn't have the index file, hence should error
 	NewTemplate(base, "")
 
 	// However, correcting the SetConfig as below and the LoadTemplates should work
-	base.SetConfig(core.BaseConfig{FS: caseFS})
+	base.SetConfig(BaseConfig{FS: caseFS})
 
 	err := LoadTemplates()
 	if err != nil {
