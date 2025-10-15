@@ -195,45 +195,15 @@ func (t *SubTemplate[U]) load(data any) error {
 
 }
 
-type failWriter struct {
-	w   io.Writer
-	err error
-}
-
-// failWriter is a custom io.Writer that captures the first error
-// that occurs during writing. This is necessary to discern between
-// template rendering errors and writer errors due to how
-// template.ExecuteTemplate works.
-func (fw *failWriter) Write(p []byte) (int, error) {
-	if fw.err != nil {
-		return 0, fw.err
-	}
-
-	n, err := fw.w.Write(p)
-	switch err {
-	case http.ErrBodyNotAllowed, http.ErrHijacked, http.ErrContentLength:
-		// these are edgecase implementation bugs on the server, panic to notify implementation
-		fw.err = err
-	case nil:
-		fw.err = nil
-	default:
-		// Any other error is likely a client disconnect, ignore it
-		fw.err = nil
-	}
-
-	return n, fw.err
-}
-
 // render is the actual implementation to render the template.
 func (t *SubTemplate[U]) render(w io.Writer, d any) {
 
-	fw := &failWriter{w: w}
-
 	// Without reload, rendering is short and simple
 	if !registry.LiveReload() {
-		err := t.t.ExecuteTemplate(fw, t.usePattern, d)
-		if err != nil {
-			// Panics if the template fails to be written due to a server error
+		err := t.t.ExecuteTemplate(w, t.usePattern, d)
+		switch err {
+		// these are edgecase implementation bugs on the server, panic to notify implementation
+		case http.ErrBodyNotAllowed, http.ErrHijacked, http.ErrContentLength:
 			panic(&TemplateError{t.ctx, t.usePattern, fmt.Errorf("%w %s", ErrTemplateExecute, err)})
 		}
 
@@ -247,7 +217,7 @@ func (t *SubTemplate[U]) render(w io.Writer, d any) {
 
 		// To allow for SSE to work even if the template fails to load,
 		// the bare JS must be injected to allow for reconnection
-		_, err := fw.Write([]byte(registry.JSToInject()))
+		_, err := w.Write([]byte(registry.JSToInject()))
 		if err != nil {
 			panic(&TemplateError{t.ctx, t.usePattern, fmt.Errorf("%w %s", ErrTemplateExecute, err)})
 		}
@@ -268,8 +238,10 @@ func (t *SubTemplate[U]) render(w io.Writer, d any) {
 		html = html[:idx] + registry.JSToInject() + html[idx:]
 	}
 
-	_, err = fw.Write([]byte(html))
-	if err != nil {
+	_, err = w.Write([]byte(html))
+	switch err {
+	// these are edgecase implementation bugs on the server, panic to notify implementation
+	case http.ErrBodyNotAllowed, http.ErrHijacked, http.ErrContentLength:
 		panic(&TemplateError{t.ctx, t.usePattern, fmt.Errorf("%w %s", ErrTemplateExecute, err)})
 	}
 }
