@@ -145,10 +145,14 @@ func NewSubTemplate[T, U any](tc *TemplateContext[T], pattern string, data U) *S
 	return &t
 }
 
+// Loads, validates and registers the template.
+// This should rarely be called directly
 func (t *SubTemplate[U]) Load() error {
 	return t.load(t.data)
 }
 
+// Renders the data to the writer with no base data present, using only
+// the data parameter provided.
 func (t *SubTemplate[U]) Render(w io.Writer, data U) {
 	t.render(w, data)
 }
